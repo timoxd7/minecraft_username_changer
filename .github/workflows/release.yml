@@ -126,6 +126,11 @@ jobs:
     needs: [create-tag, build]
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for generating changelog
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -134,18 +139,66 @@ jobs:
       - name: Display structure of downloaded files
         run: ls -R artifacts
 
+      - name: Generate Changelog
+        id: changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Get the previous tag (second to last tag)
+          previous_tag=$(git tag -l 'v[0-9]*' | sort -t 'v' -k2 -n | tail -2 | head -1)
+          new_tag="${{ needs.create-tag.outputs.new_tag }}"
+          
+          echo "Previous tag: $previous_tag"
+          echo "New tag: $new_tag"
+          
+          # Start building the changelog
+          changelog="## What's Changed"$'\n'
+          
+          if [ -z "$previous_tag" ] || [ "$previous_tag" = "$new_tag" ]; then
+            # First release - get all merged PRs
+            echo "First release, getting all merged PRs"
+            prs=$(gh pr list --state merged --json number,title,author --limit 100 2>/dev/null || echo "[]")
+          else
+            # Get merged PRs between tags using the merge commit dates
+            echo "Getting PRs merged between $previous_tag and $new_tag"
+            previous_date=$(git log -1 --format=%aI "$previous_tag" 2>/dev/null || echo "")
+            
+            if [ -n "$previous_date" ]; then
+              prs=$(gh pr list --state merged --search "merged:>=$previous_date" --json number,title,author --limit 100 2>/dev/null || echo "[]")
+            else
+              prs=$(gh pr list --state merged --json number,title,author --limit 100 2>/dev/null || echo "[]")
+            fi
+          fi
+          
+          # Parse PRs and build changelog
+          pr_count=$(echo "$prs" | jq 'length')
+          
+          if [ "$pr_count" -gt 0 ] && [ "$pr_count" != "null" ]; then
+            while IFS= read -r pr; do
+              number=$(echo "$pr" | jq -r '.number')
+              title=$(echo "$pr" | jq -r '.title')
+              author=$(echo "$pr" | jq -r '.author.login')
+              changelog+="* $title by @$author in #$number"$'\n'
+            done < <(echo "$prs" | jq -c '.[]')
+          else
+            changelog+="* Direct commits to main branch"$'\n'
+          fi
+          
+          changelog+=$'\n'"## Downloads"$'\n'
+          changelog+="- **Windows**: \`minecraft_username_changer-windows.zip\`"$'\n'
+          changelog+="- **Linux**: \`minecraft_username_changer-linux.tar.gz\`"$'\n'
+          changelog+="- **macOS**: \`minecraft_username_changer-macos.zip\`"$'\n'
+          
+          # Write changelog to file to handle multi-line content
+          echo "$changelog" > changelog.md
+          cat changelog.md
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.create-tag.outputs.new_tag }}
           name: Release ${{ needs.create-tag.outputs.new_tag }}
-          body: |
-            Automated release ${{ needs.create-tag.outputs.new_tag }}
-            
-            ## Downloads
-            - **Windows**: `minecraft_username_changer-windows.zip`
-            - **Linux**: `minecraft_username_changer-linux.tar.gz`
-            - **macOS**: `minecraft_username_changer-macos.zip`
+          body_path: changelog.md
           draft: false
           prerelease: false
           files: |
