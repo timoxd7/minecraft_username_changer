@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.timoxd" "\0"
-            VALUE "FileDescription", "minecraft_username_changer" "\0"
+            VALUE "FileDescription", "Minecraft Username Changer" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "minecraft_username_changer" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2025 com.timoxd. All rights reserved." "\0"
             VALUE "OriginalFilename", "minecraft_username_changer.exe" "\0"
-            VALUE "ProductName", "minecraft_username_changer" "\0"
+            VALUE "ProductName", "Minecraft Username Changer" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

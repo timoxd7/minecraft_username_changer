@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import 'models/minecraft_account.dart';
@@ -107,6 +109,74 @@ class _HomePageState extends State<HomePage> {
         _error = 'Failed to save: $e';
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _saveAndOpenMinecraft() async {
+    await _saveUsername();
+    if (_error != null) return; // Don't open if save failed
+
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    await _openMinecraftLauncher();
+  }
+
+  Future<void> _openMinecraftLauncher() async {
+    try {
+      if (Platform.isMacOS) {
+        // Try common macOS Minecraft launcher locations
+        final paths = [
+          '/Applications/Minecraft.app',
+          '${Platform.environment['HOME']}/Applications/Minecraft.app',
+        ];
+        for (final path in paths) {
+          if (await Directory(path).exists()) {
+            await Process.run('open', [path]);
+            return;
+          }
+        }
+        throw Exception('Minecraft Launcher not found');
+      } else if (Platform.isWindows) {
+        // Try common Windows Minecraft launcher locations
+        final localAppData = Platform.environment['LOCALAPPDATA'] ?? '';
+        final programFiles =
+            Platform.environment['ProgramFiles(x86)'] ??
+            'C:\\Program Files (x86)';
+        final paths = [
+          '$localAppData\\Packages\\Microsoft.4297127D64EC6_8wekyb3d8bbwe\\LocalCache\\Local\\runtime\\jre-legacy\\windows\\MinecraftLauncher.exe',
+          '$programFiles\\Minecraft Launcher\\MinecraftLauncher.exe',
+          'C:\\Program Files\\Minecraft Launcher\\MinecraftLauncher.exe',
+          '$localAppData\\Programs\\Minecraft Launcher\\MinecraftLauncher.exe',
+        ];
+        for (final path in paths) {
+          if (await File(path).exists()) {
+            await Process.run('start', ['', path], runInShell: true);
+            return;
+          }
+        }
+        // Try launching via start menu / shell
+        await Process.run('start', ['minecraft://'], runInShell: true);
+      } else if (Platform.isLinux) {
+        // Try common Linux Minecraft launcher locations
+        final home = Platform.environment['HOME'] ?? '';
+        final paths = [
+          '/usr/bin/minecraft-launcher',
+          '$home/.minecraft/launcher/minecraft-launcher',
+          '/opt/minecraft-launcher/minecraft-launcher',
+          '/snap/bin/minecraft-launcher',
+        ];
+        for (final path in paths) {
+          if (await File(path).exists()) {
+            await Process.start(path, [], mode: ProcessStartMode.detached);
+            return;
+          }
+        }
+        throw Exception('Minecraft Launcher not found');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = 'Could not open Minecraft Launcher: $e');
+      }
     }
   }
 
@@ -231,11 +301,25 @@ class _HomePageState extends State<HomePage> {
 
         const SizedBox(height: 16),
 
-        // Save button
-        FilledButton.icon(
-          onPressed: _saveUsername,
-          icon: const Icon(Icons.save),
-          label: const Text('Save Username'),
+        // Save buttons
+        Row(
+          children: [
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: _saveUsername,
+                icon: const Icon(Icons.save),
+                label: const Text('Save'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: _saveAndOpenMinecraft,
+                icon: const Icon(Icons.play_arrow),
+                label: const Text('Save & Open'),
+              ),
+            ),
+          ],
         ),
       ],
     );
