@@ -1,16 +1,23 @@
-# minecraft_username_changer
+# Minecraft Username Changer
 
-A new Flutter project.
+A lightweight Flutter desktop application to easily change your Minecraft username directly from your launcher accounts file.
+
+## Features
+
+- Load and display your Minecraft username information
+- Change your username with a single click
+- Cross-platform support (macOS, Linux, Windows)
+- Simple and intuitive user interface
 
 ## Getting Started
 
-This project is a starting point for a Flutter application.
+To run this application:
 
-A few resources to get you started if this is your first Flutter project:
+1. Install Flutter from [flutter.dev](https://flutter.dev)
+2. Clone this repository
+3. Run `flutter pub get`
+4. Execute `flutter run` to launch the app
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## Note
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+This project was generated with AI.
