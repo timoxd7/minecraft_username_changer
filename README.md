@@ -27,6 +27,8 @@ To run this application:
 5. Open your given Minecraft Version.
 6. After it was opened, re-enable internet so you can play local multiplayer.
 
+If you need to download Minecraft first, open the Launcher directly, download and start Minecraft once, then close it and use this tool with the previously mentioned steps.
+
 > Note: Changing your Minecraft username may violate Mojang's terms of service. Use this tool at your own risk. Also, this tool is intended for offline/local multiplayer use only, don't know if it works otherwise.
 
 ## Note
