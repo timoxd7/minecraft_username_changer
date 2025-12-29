@@ -18,6 +18,17 @@ To run this application:
 3. Run `flutter pub get`
 4. Execute `flutter run` to launch the app
 
+## How to Use
+
+1. Open the application.
+2. Disable internet (e.g. Flight Mode or disable Wi-Fi).
+3. Change the Username how you need it.
+4. Save the Username OR directly click Save & Open Launcher.
+5. Open your given Minecraft Version.
+6. After it was opened, re-enable internet so you can play local multiplayer.
+
+> Note: Changing your Minecraft username may violate Mojang's terms of service. Use this tool at your own risk. Also, this tool is intended for offline/local multiplayer use only, don't know if it works otherwise.
+
 ## Note
 
 This project was generated with AI.
