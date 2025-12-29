@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: read
 
 jobs:
   # First job: Create a new tag
@@ -23,8 +24,8 @@ jobs:
       - name: Get latest tag and create new one
         id: create_tag
         run: |
-          # Get the latest tag that matches our pattern
-          latest_tag=$(git tag -l 'v[0-9]*' | sort -t 'v' -k2 -n | tail -1)
+          # Get the latest tag that matches our pattern (using version sort for proper ordering)
+          latest_tag=$(git tag -l 'v[0-9]*' | sort -V | tail -1)
           
           if [ -z "$latest_tag" ]; then
             # No tags exist yet, start with v1
@@ -144,53 +145,85 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Get the previous tag (second to last tag)
-          previous_tag=$(git tag -l 'v[0-9]*' | sort -t 'v' -k2 -n | tail -2 | head -1)
+          set -e  # Exit on error
+          
+          # Get the previous tag (second to last tag) using version sort
+          previous_tag=$(git tag -l 'v[0-9]*' | sort -V | tail -2 | head -1)
           new_tag="${{ needs.create-tag.outputs.new_tag }}"
           
           echo "Previous tag: $previous_tag"
           echo "New tag: $new_tag"
           
-          # Start building the changelog
-          changelog="## What's Changed"$'\n'
+          # Initialize changelog file
+          printf '%s\n' "## What's Changed" > changelog.md
           
+          # Function to fetch PRs with error handling
+          fetch_prs() {
+            local search_args="$1"
+            local result
+            local exit_code
+            
+            if [ -n "$search_args" ]; then
+              result=$(gh pr list --state merged --search "$search_args" --json number,title,author --limit 500 2>&1) && exit_code=0 || exit_code=$?
+            else
+              result=$(gh pr list --state merged --json number,title,author --limit 500 2>&1) && exit_code=0 || exit_code=$?
+            fi
+            
+            if [ $exit_code -ne 0 ]; then
+              echo "::warning::Failed to fetch PRs: $result"
+              echo "[]"
+              return 1
+            fi
+            
+            # Validate JSON
+            if ! echo "$result" | jq empty 2>/dev/null; then
+              echo "::warning::Invalid JSON response from gh pr list"
+              echo "[]"
+              return 1
+            fi
+            
+            echo "$result"
+            return 0
+          }
+          
+          # Fetch PRs based on whether this is the first release
           if [ -z "$previous_tag" ] || [ "$previous_tag" = "$new_tag" ]; then
-            # First release - get all merged PRs
             echo "First release, getting all merged PRs"
-            prs=$(gh pr list --state merged --json number,title,author --limit 100 2>/dev/null || echo "[]")
+            prs=$(fetch_prs "")
           else
-            # Get merged PRs between tags using the merge commit dates
-            echo "Getting PRs merged between $previous_tag and $new_tag"
+            echo "Getting PRs merged after $previous_tag"
             previous_date=$(git log -1 --format=%aI "$previous_tag" 2>/dev/null || echo "")
             
             if [ -n "$previous_date" ]; then
-              prs=$(gh pr list --state merged --search "merged:>=$previous_date" --json number,title,author --limit 100 2>/dev/null || echo "[]")
+              # Use merged:> (strictly greater than) to exclude PRs from previous release
+              prs=$(fetch_prs "merged:>$previous_date")
             else
-              prs=$(gh pr list --state merged --json number,title,author --limit 100 2>/dev/null || echo "[]")
+              echo "::warning::Could not get date for previous tag, fetching all PRs"
+              prs=$(fetch_prs "")
             fi
           fi
           
           # Parse PRs and build changelog
           pr_count=$(echo "$prs" | jq 'length')
           
-          if [ "$pr_count" -gt 0 ] && [ "$pr_count" != "null" ]; then
-            while IFS= read -r pr; do
-              number=$(echo "$pr" | jq -r '.number')
-              title=$(echo "$pr" | jq -r '.title')
-              author=$(echo "$pr" | jq -r '.author.login')
-              changelog+="* $title by @$author in #$number"$'\n'
-            done < <(echo "$prs" | jq -c '.[]')
-          else
-            changelog+="* Direct commits to main branch"$'\n'
+          if [ "$pr_count" -ge 500 ]; then
+            echo "::warning::PR limit of 500 reached. Some PRs may be omitted from changelog."
           fi
           
-          changelog+=$'\n'"## Downloads"$'\n'
-          changelog+="- **Windows**: \`minecraft_username_changer-windows.zip\`"$'\n'
-          changelog+="- **Linux**: \`minecraft_username_changer-linux.tar.gz\`"$'\n'
-          changelog+="- **macOS**: \`minecraft_username_changer-macos.zip\`"$'\n'
+          if [ "$pr_count" -gt 0 ] && [ "$pr_count" != "null" ]; then
+            # Use jq to safely format each PR entry, escaping special characters
+            echo "$prs" | jq -r '.[] | "* " + (.title | gsub("[\\[\\]`*_]"; "\\\(.)")) + " by @" + .author.login + " in #" + (.number | tostring)' >> changelog.md
+          else
+            printf '%s\n' "* Direct commits to main branch" >> changelog.md
+          fi
           
-          # Write changelog to file to handle multi-line content
-          echo "$changelog" > changelog.md
+          # Add downloads section
+          printf '\n%s\n' "## Downloads" >> changelog.md
+          printf '%s\n' "- **Windows**: \`minecraft_username_changer-windows.zip\`" >> changelog.md
+          printf '%s\n' "- **Linux**: \`minecraft_username_changer-linux.tar.gz\`" >> changelog.md
+          printf '%s\n' "- **macOS**: \`minecraft_username_changer-macos.zip\`" >> changelog.md
+          
+          echo "Generated changelog:"
           cat changelog.md
 
       - name: Create Release
