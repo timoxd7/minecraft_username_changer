@@ -147,8 +147,14 @@ jobs:
         run: |
           set -e  # Exit on error
           
-          # Get the previous tag (second to last tag) using version sort
-          previous_tag=$(git tag -l 'v[0-9]*' | sort -V | tail -2 | head -1)
+          # Determine the previous tag using version sort
+          # Check tag count to properly handle first release scenario
+          tag_count=$(git tag -l 'v[0-9]*' | wc -l | tr -d ' ')
+          if [ "$tag_count" -le 1 ]; then
+            previous_tag=""
+          else
+            previous_tag=$(git tag -l 'v[0-9]*' | sort -V | tail -2 | head -1)
+          fi
           new_tag="${{ needs.create-tag.outputs.new_tag }}"
           
           echo "Previous tag: $previous_tag"
@@ -170,16 +176,16 @@ jobs:
             fi
             
             if [ $exit_code -ne 0 ]; then
-              echo "::warning::Failed to fetch PRs: $result"
+              echo "::warning::Failed to fetch PRs: $result" >&2
               echo "[]"
-              return 1
+              return 0
             fi
             
             # Validate JSON
             if ! echo "$result" | jq empty 2>/dev/null; then
-              echo "::warning::Invalid JSON response from gh pr list"
+              echo "::warning::Invalid JSON response from gh pr list" >&2
               echo "[]"
-              return 1
+              return 0
             fi
             
             echo "$result"
@@ -187,7 +193,7 @@ jobs:
           }
           
           # Fetch PRs based on whether this is the first release
-          if [ -z "$previous_tag" ] || [ "$previous_tag" = "$new_tag" ]; then
+          if [ -z "$previous_tag" ]; then
             echo "First release, getting all merged PRs"
             prs=$(fetch_prs "")
           else
@@ -204,15 +210,18 @@ jobs:
           fi
           
           # Parse PRs and build changelog
-          pr_count=$(echo "$prs" | jq 'length')
+          pr_count=$(echo "$prs" | jq 'length' 2>/dev/null || echo "0")
           
           if [ "$pr_count" -ge 500 ]; then
             echo "::warning::PR limit of 500 reached. Some PRs may be omitted from changelog."
           fi
           
-          if [ "$pr_count" -gt 0 ] && [ "$pr_count" != "null" ]; then
-            # Use jq to safely format each PR entry, escaping special characters
-            echo "$prs" | jq -r '.[] | "* " + (.title | gsub("[\\[\\]`*_]"; "\\\(.)")) + " by @" + .author.login + " in #" + (.number | tostring)' >> changelog.md
+          if [ "$pr_count" -gt 0 ]; then
+            # Use jq to safely format each PR entry, escaping markdown special characters
+            echo "$prs" | jq -r '.[] | "* " + (.title | gsub("[\\[\\]`*_]"; "\\\(.)")) + " by @" + .author.login + " in #" + (.number | tostring)' >> changelog.md 2>/dev/null || {
+              echo "::warning::Failed to format PRs with jq, using simple format"
+              echo "$prs" | jq -r '.[] | "* " + .title + " by @" + .author.login + " in #" + (.number | tostring)' >> changelog.md
+            }
           else
             printf '%s\n' "* Direct commits to main branch" >> changelog.md
           fi
